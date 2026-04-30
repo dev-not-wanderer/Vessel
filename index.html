@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Vessel</title>
+  <!--
+    CAPACITOR SETUP
+    ───────────────────────────────────────────────────────────
+    1. npm install @capacitor/core @capacitor/cli
+    2. npm install @capacitor/local-notifications
+    3. npx cap init "Vessel" "com.yourname.vessel"
+    4. Place this file in /www/index.html
+    5. npx cap add android
+    6. npx cap sync
+    7. npx cap open android
+
+    AndroidManifest.xml — add inside <manifest>:
+      <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+      <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+      <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+
+    The app detects window.Capacitor.Plugins.LocalNotifications automatically.
+    Falls back to Web Notifications API in browser.
+  -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    :root { --lh: 32px; }
+
+    [data-theme="dark"] {
+      --bg:#0c0c0c; --bg2:#141414; --bg3:#1c1c1c; --border:#242424;
+      --text:#efefef; --t2:#888; --t3:#484848; --line-c:#1e1e1e;
+      --acc:#efefef; --acc-inv:#0c0c0c;
+    }
+    [data-theme="light"] {
+      --bg:#f7f7f2; --bg2:#efefea; --bg3:#e7e7e2; --border:#d4d4cc;
+      --text:#111; --t2:#666; --t3:#aaa; --line-c:#d8d8d0;
+      --acc:#111; --acc-inv:#f7f7f2;
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--text);
+      font-family:'Crimson Pro',Georgia,serif;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+    button{cursor:pointer}
+    input,textarea{-webkit-appearance:none}
+
+    #app{display:flex;flex-direction:column;height:100dvh;
+      padding-top:env(safe-area-inset-top);overflow:hidden;transition:background .25s,color .25s}
+
+    /* LOCK */
+    #lock-screen{position:fixed;inset:0;z-index:999;background:var(--bg);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:1.75rem;padding:2.5rem 2rem}
+    #lock-screen.hidden{display:none}
+    .lock-brand{display:flex;flex-direction:column;align-items:center;gap:.25rem}
+    .lock-brand-name{font-family:'Playfair Display',serif;font-size:2.75rem;font-style:italic;
+      font-weight:400;letter-spacing:.04em;color:var(--text)}
+    .lock-brand-sub{font-family:'DM Mono',monospace;font-size:.65rem;
+      letter-spacing:.18em;text-transform:uppercase;color:var(--t3)}
+    .lock-form{width:100%;max-width:300px;display:flex;flex-direction:column;gap:.875rem}
+    .pin-input{width:100%;padding:.875rem 1rem;text-align:center;background:transparent;
+      border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;
+      font-size:1.1rem;letter-spacing:.25em;outline:none}
+    .pin-input:focus{border-color:var(--t2)}
+    .lock-submit{padding:.875rem;background:var(--text);color:var(--acc-inv);border:none;
+      font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.12em;
+      text-transform:uppercase;transition:opacity .15s}
+    .lock-submit:active{opacity:.7}
+    .lock-err{text-align:center;font-size:.8rem;font-style:italic;color:var(--t2);min-height:1.2em}
+
+    /* HEADER */
+    #header{display:flex;align-items:center;justify-content:space-between;
+      padding:.875rem 1.25rem .625rem;border-bottom:1px solid var(--border);
+      background:var(--bg);flex-shrink:0}
+    .app-name{font-family:'Playfair Display',serif;font-size:1.4rem;font-style:italic;
+      font-weight:400;letter-spacing:.03em}
+    .hdr-right{display:flex;gap:.5rem;align-items:center}
+    .icon-btn{background:none;border:none;color:var(--t2);width:34px;height:34px;
+      display:flex;align-items:center;justify-content:center;transition:color .15s;border-radius:50%}
+    .icon-btn:active{color:var(--text)}
+    .icon-btn svg{pointer-events:none}
+
+    /* NAV */
+    #nav{display:flex;border-bottom:1px solid var(--border);background:var(--bg);
+      flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+    #nav::-webkit-scrollbar{display:none}
+    .nav-tab{flex:1;padding:.625rem .375rem;font-family:'DM Mono',monospace;
+      font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);
+      background:none;border:none;white-space:nowrap;position:relative;transition:color .15s}
+    .nav-tab.active{color:var(--text)}
+    .nav-tab.active::after{content:'';position:absolute;bottom:0;left:15%;width:70%;
+      height:1px;background:var(--text)}
+
+    /* BULK */
+    #bulk-bar{display:none;align-items:center;justify-content:space-between;
+      padding:.5rem 1.25rem;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+    #bulk-bar.on{display:flex}
+    .bulk-count{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--t2);letter-spacing:.05em}
+    .bulk-acts{display:flex;gap:1rem}
+    .bulk-btn{background:none;border:none;font-family:'DM Mono',monospace;font-size:.62rem;
+      letter-spacing:.08em;text-transform:uppercase;color:var(--t2);transition:color .15s;padding:.25rem 0}
+    .bulk-btn:active{color:var(--text)}
+
+    /* CONTENT */
+    #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+      padding-bottom:calc(5rem + env(safe-area-inset-bottom))}
+    .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+      height:55vh;gap:.75rem;color:var(--t3)}
+    .empty-glyph{font-size:1.75rem;opacity:.4}
+    .empty-msg{font-size:.95rem;font-style:italic;text-align:center;max-width:220px;line-height:1.7}
+
+    /* NOTE ITEM */
+    .note-item{display:flex;align-items:flex-start;gap:.75rem;padding:1rem 1.25rem;
+      border-bottom:1px solid var(--border);transition:background .1s;
+      animation:fadeUp .18s ease both;position:relative}
+    .note-item:active{background:var(--bg2)}
+    .n-check{width:18px;height:18px;flex-shrink:0;margin-top:.2rem;
+      border:1px solid var(--border);background:transparent;
+      display:none;align-items:center;justify-content:center}
+    .bulk-mode .n-check{display:flex}
+    .n-check.on{background:var(--text);border-color:var(--text)}
+    .n-check.on::after{content:'✓';color:var(--acc-inv);font-size:.65rem}
+    .n-body{flex:1;min-width:0}
+    .n-tag{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+      text-transform:uppercase;color:var(--t3);margin-bottom:.25rem}
+    .n-title{font-family:'Playfair Display',serif;font-size:1rem;font-weight:400;
+      margin-bottom:.2rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .n-preview{font-size:.9rem;color:var(--t2);font-style:italic;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5}
+    .n-date{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--t3);
+      margin-top:.35rem;letter-spacing:.04em}
+    .n-del-date{font-size:.58rem;font-family:'DM Mono',monospace;color:var(--t3)}
+    .n-lock{font-size:.7rem;color:var(--t3);margin-top:.2rem;flex-shrink:0}
+    .grave-acts{display:flex;gap:.75rem;margin-top:.35rem}
+    .grave-btn{background:none;border:none;font-family:'DM Mono',monospace;font-size:.58rem;
+      letter-spacing:.08em;text-transform:uppercase;color:var(--t3);transition:color .15s;padding:0}
+    .grave-btn:active{color:var(--text)}
+
+    /* FAB */
+    #fab{position:fixed;bottom:calc(1.75rem + env(safe-area-inset-bottom));right:1.5rem;
+      z-index:100;width:56px;height:56px;border-radius:50%;background:var(--text);
+      color:var(--acc-inv);border:none;display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 24px rgba(0,0,0,.45);transition:transform .2s}
+    #fab:active{transform:scale(.91)}
+    #fab svg{transition:transform .25s}
+    #fab.open svg{transform:rotate(45deg)}
+    #fab-menu{position:fixed;bottom:calc(5.25rem + env(safe-area-inset-bottom));right:1.5rem;
+      z-index:99;display:flex;flex-direction:column;gap:.625rem;align-items:flex-end;
+      opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s}
+    #fab-menu.open{opacity:1;transform:translateY(0);pointer-events:all}
+    .fab-opt{display:flex;align-items:center;gap:.625rem;cursor:pointer}
+    .fab-opt-lbl{background:var(--bg2);border:1px solid var(--border);padding:.45rem .875rem;
+      font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--text);white-space:nowrap}
+    .fab-opt-ico{width:40px;height:40px;border-radius:50%;background:var(--text);
+      color:var(--acc-inv);display:flex;align-items:center;justify-content:center;
+      font-size:.95rem;flex-shrink:0}
+    #backdrop{position:fixed;inset:0;z-index:98;background:rgba(0,0,0,.55);display:none}
+    #backdrop.on{display:block}
+
+    /* EDITOR */
+    #editor{position:fixed;inset:0;z-index:200;background:var(--bg);
+      display:flex;flex-direction:column;
+      padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);
+      transform:translateY(100%);transition:transform .3s cubic-bezier(.16,1,.3,1)}
+    #editor.open{transform:translateY(0)}
+    .ed-header{display:flex;align-items:center;justify-content:space-between;
+      padding:.75rem 1rem .75rem 1.25rem;border-bottom:1px solid var(--border);flex-shrink:0}
+    .ed-left,.ed-right{display:flex;align-items:center;gap:.375rem}
+    .ed-type-lbl{font-family:'DM Mono',monospace;font-size:.62rem;
+      letter-spacing:.1em;text-transform:uppercase;color:var(--t3)}
+    .ed-saved-dot{font-family:'DM Mono',monospace;font-size:.55rem;letter-spacing:.06em;
+      color:var(--t3);opacity:0;transition:opacity .4s}
+    .ed-saved-dot.show{opacity:1}
+    .ed-btn{background:none;border:1px solid var(--border);color:var(--t2);
+      padding:.35rem .6rem;font-family:'DM Mono',monospace;font-size:.6rem;
+      letter-spacing:.08em;text-transform:uppercase;transition:all .15s;
+      display:flex;align-items:center;gap:.3rem}
+    .ed-btn.active{background:var(--text);color:var(--acc-inv);border-color:var(--text)}
+    .ed-save{background:var(--text);color:var(--acc-inv);border:none;padding:.45rem 1rem;
+      font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;
+      text-transform:uppercase;transition:opacity .15s}
+    .ed-save:active{opacity:.7}
+    .ed-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column}
+    .ed-title{width:100%;padding:1.125rem 1.25rem .375rem;background:transparent;border:none;
+      outline:none;font-family:'Playfair Display',serif;font-size:1.45rem;font-weight:400;
+      color:var(--text);resize:none;line-height:1.35;overflow:hidden}
+    .ed-title::placeholder{color:var(--t3);font-style:italic}
+    .ed-sub{width:100%;padding:0 1.25rem .875rem;background:transparent;border:none;outline:none;
+      font-family:'Crimson Pro',serif;font-size:.95rem;font-style:italic;color:var(--t2)}
+    .ed-sub::placeholder{color:var(--t3)}
+    .ed-content{flex:1;padding:0 1.25rem 3rem;min-height:60vh}
+    .ed-content.lined{background-image:repeating-linear-gradient(
+      transparent 0px,transparent 31px,var(--line-c) 31px,var(--line-c) 32px);
+      background-size:100% var(--lh)}
+    .ed-textarea{width:100%;background:transparent;border:none;outline:none;
+      font-family:'Crimson Pro',serif;font-size:1.15rem;line-height:var(--lh);color:var(--text);
+      resize:none;min-height:60vh;caret-color:var(--text);padding:0;display:block}
+    .ed-textarea::placeholder{color:var(--t3);font-style:italic}
+    .ed-textarea[readonly]{cursor:default}
+
+    /* LIST EDITOR */
+    .list-ed{padding:0 1.25rem 3rem;flex:1}
+    .li-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;
+      border-bottom:1px solid var(--border)}
+    .li-marker{min-width:22px;text-align:right;flex-shrink:0;
+      font-family:'DM Mono',monospace;font-size:.8rem;color:var(--t3);user-select:none}
+    .li-inp{flex:1;background:transparent;border:none;outline:none;
+      font-family:'Crimson Pro',serif;font-size:1.1rem;color:var(--text);
+      line-height:1.6;padding:0}
+    .li-inp::placeholder{color:var(--t3);font-style:italic}
+    .li-rm{background:none;border:none;color:var(--t3);font-size:1.1rem;
+      padding:.25rem;line-height:1;transition:color .15s}
+    .li-rm:active{color:var(--text)}
+    .li-add{background:none;border:none;padding:.75rem 0;
+      font-family:'Crimson Pro',serif;font-size:.95rem;font-style:italic;
+      color:var(--t3);transition:color .15s;display:block;text-align:left}
+    .li-add:active{color:var(--text)}
+
+    /* COUNTER FOOTER */
+    #ed-footer{
+      flex-shrink:0; padding:.5rem 1.25rem;
+      border-top:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--bg);
+    }
+    .ed-counter{
+      font-family:'DM Mono',monospace; font-size:.58rem;
+      letter-spacing:.08em; color:var(--t3);
+    }
+    #ed-footer.hidden{ display:none; }
+
+    /* SETTINGS */
+    #settings{position:fixed;inset:0;z-index:300;background:var(--bg);
+      transform:translateX(100%);transition:transform .3s cubic-bezier(.16,1,.3,1);
+      padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);
+      overflow-y:auto}
+    #settings.open{transform:translateX(0)}
+    .set-hdr{display:flex;align-items:center;gap:.875rem;
+      padding:1rem 1.25rem;border-bottom:1px solid var(--border)}
+    .set-hdr-title{font-family:'Playfair Display',serif;font-size:1.2rem;font-style:italic}
+    .set-sec{border-bottom:1px solid var(--border);padding:1.125rem 1.25rem}
+    .set-sec-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.14em;
+      text-transform:uppercase;color:var(--t3);margin-bottom:.875rem}
+    .set-row{display:flex;align-items:center;justify-content:space-between;padding:.5rem 0}
+    .set-lbl{font-size:.95rem;font-style:italic}
+    .set-sub{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--t3);margin-top:.1rem}
+    .toggle{width:44px;height:24px;border-radius:12px;border:1px solid var(--border);
+      background:transparent;position:relative;cursor:pointer;transition:all .2s;flex-shrink:0}
+    .toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;
+      border-radius:50%;background:var(--t3);transition:all .2s}
+    .toggle.on{background:var(--text);border-color:var(--text)}
+    .toggle.on::after{transform:translateX(20px);background:var(--acc-inv)}
+    .set-btn{padding:.4rem .875rem;background:none;border:1px solid var(--border);color:var(--t2);
+      font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.08em;
+      text-transform:uppercase;transition:all .15s}
+    .set-btn:active{background:var(--text);color:var(--acc-inv);border-color:var(--text)}
+    .notif-time{background:transparent;border:1px solid var(--border);color:var(--text);
+      font-family:'DM Mono',monospace;font-size:.78rem;padding:.35rem .625rem;
+      outline:none;-webkit-appearance:none;color-scheme:dark}
+    [data-theme="light"] .notif-time{color-scheme:light}
+    .reminder-item{display:flex;align-items:flex-start;gap:.75rem;padding:.5rem 0;
+      border-bottom:1px solid var(--border)}
+    .reminder-item:last-child{border-bottom:none}
+    .reminder-text{font-size:.9rem;font-style:italic;color:var(--t2)}
+    .reminder-when{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--t3);margin-top:.15rem}
+    .reminder-del{background:none;border:none;color:var(--t3);font-size:1rem;
+      padding:.25rem;transition:color .15s;flex-shrink:0;line-height:1}
+    .reminder-del:active{color:var(--text)}
+    #reminder-list{margin-top:.5rem;width:100%}
+
+    /* MODAL */
+    #modal{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.6);
+      display:none;align-items:center;justify-content:center;padding:1.5rem}
+    #modal.open{display:flex}
+    .modal-box{background:var(--bg2);border:1px solid var(--border);padding:1.625rem;
+      width:100%;max-width:320px;display:flex;flex-direction:column;gap:.875rem}
+    .modal-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;font-style:italic}
+    .modal-msg{font-size:.9rem;font-style:italic;color:var(--t2);line-height:1.6}
+    .modal-inp{width:100%;padding:.7rem .875rem;background:transparent;
+      border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;
+      font-size:.85rem;letter-spacing:.08em;outline:none;margin-top:.125rem}
+    .modal-inp:focus{border-color:var(--t2)}
+    .modal-inp.err{border-color:var(--text)}
+    .modal-acts{display:flex;gap:.625rem;justify-content:flex-end}
+    .m-btn{padding:.45rem .875rem;font-family:'DM Mono',monospace;font-size:.65rem;
+      letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .15s}
+    .m-btn.sec{background:none;border:1px solid var(--border);color:var(--t2)}
+    .m-btn.pri{background:var(--text);color:var(--acc-inv);border:none}
+    .m-btn:active{opacity:.7}
+
+    /* DREAM JOURNAL */
+    .dream-meta{padding:.75rem 1.25rem .25rem;display:flex;flex-direction:column;gap:.625rem;flex-shrink:0}
+    .dream-date-row{display:flex;align-items:center;gap:.625rem}
+    .dream-date-lbl{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);white-space:nowrap}
+    .dream-date-inp{background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--t2);
+      font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.04em;outline:none;padding:.15rem .25rem;
+      color-scheme:dark}
+    [data-theme="light"] .dream-date-inp{color-scheme:light}
+    .dream-date-inp[readonly]{pointer-events:none;border-color:transparent}
+    .dream-tags-row{display:flex;flex-wrap:wrap;gap:.375rem}
+    .dream-tag{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.09em;text-transform:uppercase;
+      padding:.3rem .65rem;border:1px solid var(--border);background:transparent;color:var(--t3);
+      cursor:pointer;transition:all .15s;user-select:none}
+    .dream-tag.sel{background:var(--text);color:var(--acc-inv);border-color:var(--text)}
+    .dream-tag[readonly]{pointer-events:none}
+    .dream-divider{height:1px;background:var(--border);margin:.25rem 0}
+
+    /* Dream list items */
+    .dream-moods{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem}
+    .dream-mood-pill{font-family:'DM Mono',monospace;font-size:.52rem;letter-spacing:.08em;
+      text-transform:uppercase;padding:.15rem .45rem;border:1px solid var(--border);color:var(--t3)}
+
+    ::-webkit-scrollbar{width:2px}
+    ::-webkit-scrollbar-thumb{background:var(--border)}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- LOCK -->
+  <div id="lock-screen" class="hidden">
+    <div class="lock-brand">
+      <div class="lock-brand-name">Vessel</div>
+      <div class="lock-brand-sub">everything you carry</div>
+    </div>
+    <div class="lock-form">
+      <input type="password" id="lock-inp" class="pin-input" placeholder="enter password" autocomplete="off">
+      <button class="lock-submit" id="lock-sub">Open</button>
+      <div class="lock-err" id="lock-err"></div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="app-name">Vessel</div>
+    <div class="hdr-right">
+      <button class="icon-btn" id="theme-btn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="settings-btn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div id="nav">
+    <button class="nav-tab active" data-view="home">Notes</button>
+    <button class="nav-tab" data-view="dreams">Dreams</button>
+    <button class="nav-tab" data-view="love">Love</button>
+    <button class="nav-tab" data-view="graveyard">Graveyard</button>
+    <button class="nav-tab" data-view="vault">Vault</button>
+  </div>
+
+  <!-- BULK BAR -->
+  <div id="bulk-bar">
+    <div class="bulk-count" id="bulk-count">0 selected</div>
+    <div class="bulk-acts">
+      <button class="bulk-btn" id="b-all">All</button>
+      <button class="bulk-btn" id="b-dup">Duplicate</button>
+      <button class="bulk-btn" id="b-del">Delete</button>
+      <button class="bulk-btn" id="b-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <div id="content"></div>
+
+  <!-- FAB -->
+  <button id="fab">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 5v14M5 12h14"/>
+    </svg>
+  </button>
+  <div id="fab-menu">
+    <div class="fab-opt" data-type="hate">
+      <div class="fab-opt-lbl">Things I Hate</div>
+      <div class="fab-opt-ico">✕</div>
+    </div>
+    <div class="fab-opt" data-type="love">
+      <div class="fab-opt-lbl">Things I Love</div>
+      <div class="fab-opt-ico">♡</div>
+    </div>
+    <div class="fab-opt" data-type="dream">
+      <div class="fab-opt-lbl">Dream Journal</div>
+      <div class="fab-opt-ico">☽</div>
+    </div>
+    <div class="fab-opt" data-type="diary">
+      <div class="fab-opt-lbl">Write a Note</div>
+      <div class="fab-opt-ico">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div id="backdrop"></div>
+</div>
+
+<!-- EDITOR -->
+<div id="editor">
+  <div class="ed-header">
+    <div class="ed-left">
+      <button class="icon-btn" id="ed-close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="ed-type-lbl" id="ed-type-lbl">Note</div>
+      <div class="ed-saved-dot" id="ed-saved-dot">● saved</div>
+    </div>
+    <div class="ed-right">
+      <button class="ed-btn" id="ed-lined" style="display:none">Lines</button>
+      <button class="ed-btn" id="ed-list-ul" style="display:none">• UL</button>
+      <button class="ed-btn" id="ed-list-ol" style="display:none">1. OL</button>
+      <button class="ed-btn" id="ed-lock">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+      </button>
+      <button class="ed-save" id="ed-save">Save</button>
+    </div>
+  </div>
+  <div class="ed-body" id="ed-body"></div>
+  <div id="ed-footer" class="hidden">
+    <span class="ed-counter" id="ed-counter-left"></span>
+    <span class="ed-counter" id="ed-counter-right"></span>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settings">
+  <div class="set-hdr">
+    <button class="icon-btn" id="settings-close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <div class="set-hdr-title">Settings</div>
+  </div>
+
+  <div class="set-sec">
+    <div class="set-sec-title">Appearance</div>
+    <div class="set-row">
+      <div><div class="set-lbl">Dark Mode</div></div>
+      <button class="toggle" id="s-theme"></button>
+    </div>
+  </div>
+
+  <div class="set-sec">
+    <div class="set-sec-title">Security</div>
+    <div class="set-row">
+      <div><div class="set-lbl">App Lock</div><div class="set-sub">Require password on open</div></div>
+      <button class="toggle" id="s-lock-toggle"></button>
+    </div>
+    <div class="set-row">
+      <div><div class="set-lbl">App Password</div><div class="set-sub" id="s-app-status">Not set</div></div>
+      <button class="set-btn" id="s-app-pwd">Set / Change</button>
+    </div>
+    <div class="set-row">
+      <div><div class="set-lbl">Vault Password</div><div class="set-sub" id="s-vault-status">Not set</div></div>
+      <button class="set-btn" id="s-vault-pwd">Set / Change</button>
+    </div>
+  </div>
+
+  <div class="set-sec">
+    <div class="set-sec-title">Notifications</div>
+
+    <div class="set-row">
+      <div><div class="set-lbl">Permission</div><div class="set-sub" id="s-notif-perm">Unknown</div></div>
+      <button class="set-btn" id="s-notif-req">Request</button>
+    </div>
+
+    <div class="set-row">
+      <div><div class="set-lbl">Daily Reminder</div><div class="set-sub">A quiet knock at your chosen hour</div></div>
+      <button class="toggle" id="s-daily-toggle"></button>
+    </div>
+    <div class="set-row" id="s-daily-time-row" style="display:none">
+      <div class="set-lbl" style="font-size:.85rem;font-style:italic">Reminder time</div>
+      <input type="time" id="s-daily-time" class="notif-time" value="21:00">
+    </div>
+
+    <div class="set-row">
+      <div><div class="set-lbl">Inactivity Nudge</div><div class="set-sub" id="s-inact-sub">After 3 days without writing</div></div>
+      <button class="toggle" id="s-inact-toggle"></button>
+    </div>
+    <div class="set-row" id="s-inact-days-row" style="display:none">
+      <div class="set-lbl" style="font-size:.85rem;font-style:italic">Days without writing</div>
+      <select id="s-inact-days" class="notif-time" style="padding:.35rem .4rem">
+        <option value="2">2 days</option>
+        <option value="3" selected>3 days</option>
+        <option value="5">5 days</option>
+        <option value="7">7 days</option>
+      </select>
+    </div>
+
+    <div class="set-row">
+      <div><div class="set-lbl">Gentle Check-ins</div><div class="set-sub">A few quiet moments throughout the day</div></div>
+      <button class="toggle" id="s-checkin-toggle"></button>
+    </div>
+
+    <div class="set-row" style="align-items:flex-start;flex-direction:column;gap:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <div><div class="set-lbl">Custom Reminders</div><div class="set-sub">Words you leave for yourself</div></div>
+        <button class="set-btn" id="s-add-reminder">+ Add</button>
+      </div>
+      <div id="reminder-list"></div>
+    </div>
+  </div>
+
+  <div class="set-sec">
+    <div class="set-sec-title">Vessel</div>
+    <div class="set-row">
+      <div class="set-lbl" style="color:var(--t2);font-size:.85rem;line-height:1.7">A quiet place for everything you carry.</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal">
+  <div class="modal-box">
+    <div class="modal-ttl" id="modal-ttl"></div>
+    <div class="modal-msg" id="modal-msg"></div>
+    <div id="modal-inps"></div>
+    <div class="modal-acts" id="modal-acts"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── IndexedDB ────────────────────────────────────────────────
+let _db;
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('vessel', 1);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      ['notes','graveyard','settings'].forEach(s => {
+        if (!d.objectStoreNames.contains(s)) d.createObjectStore(s, { keyPath: s === 'settings' ? 'key' : 'id' });
+      });
+    };
+    req.onsuccess = e => { _db = e.target.result; res(); };
+    req.onerror   = () => rej(req.error);
+  });
+}
+const IDB = {
+  _rq(store, mode, fn) {
+    return new Promise((res, rej) => {
+      const tx = _db.transaction(store, mode), os = tx.objectStore(store), req = fn(os);
+      if (req) { req.onsuccess = () => res(req.result ?? null); req.onerror = () => rej(req.error); }
+      else      { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }
+    });
+  },
+  get:    (s,k)    => IDB._rq(s,'readonly',  os => os.get(k)),
+  getAll: (s)      => IDB._rq(s,'readonly',  os => os.getAll()),
+  put:    (s,item) => IDB._rq(s,'readwrite', os => os.put(item)),
+  del:    (s,k)    => IDB._rq(s,'readwrite', os => os.delete(k)),
+  async getSetting(k)   { const r = await IDB.get('settings',k); return r?.value ?? null; },
+  async setSetting(k,v) { await IDB.put('settings',{key:k,value:v}); },
+};
+
+// ── Crypto ───────────────────────────────────────────────────
+async function hashPwd(pwd) {
+  if (!pwd) return null;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pwd));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── Notifications ────────────────────────────────────────────
+const CapLN = window?.Capacitor?.Plugins?.LocalNotifications ?? null;
+
+const DAILY_MSGS = [
+  {title:'Vessel',          body:'The page is waiting for you.'},
+  {title:'Come as you are', body:'Nothing needs to be sorted out to write.'},
+  {title:'Vessel',          body:'Something happened today worth keeping.'},
+  {title:'Still here',      body:'Your words deserve a home.'},
+  {title:'Vessel',          body:'Even a sentence is enough. Come.'},
+  {title:'You showed up.',  body:'Now write.'},
+  {title:'Vessel',          body:'What are you carrying tonight?'},
+];
+const CHECKIN_MSGS = [
+  {title:'How are you?',        body:'Really. How are you holding up?'},
+  {title:'Vessel',              body:'Something worth remembering happened today.'},
+  {title:"You're allowed",      body:'To feel all of it.'},
+  {title:'The quiet ones',      body:"Carry the most. What are you carrying?"},
+  {title:'Vessel',              body:"What's sitting heavy on you today?"},
+  {title:'A small thing',       body:'Sometimes one sentence is everything.'},
+  {title:'Come back',           body:"The page doesn't judge. It just holds."},
+  {title:'Vessel',              body:"Write the thing you haven't said out loud."},
+];
+const INACT_MSGS = [
+  {title:"It's been a while.",  body:"The page misses you. No pressure, just an open door."},
+  {title:'Vessel',              body:"You haven't written in a few days. Come when you're ready."},
+  {title:'Still here.',         body:'Whenever you are.'},
+];
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+async function requestNotifPermission() {
+  try {
+    if (CapLN) { const r = await CapLN.requestPermissions(); return r.display === 'granted'; }
+    if ('Notification' in window) { return await Notification.requestPermission() === 'granted'; }
+  } catch(e) { console.warn(e); }
+  return false;
+}
+
+function notifPermStatus() {
+  if (CapLN) return 'Managed by Capacitor';
+  if (!('Notification' in window)) return 'Not supported';
+  return {granted:'Granted ✓', denied:'Denied — enable in system settings', default:'Not yet requested'}[Notification.permission];
+}
+
+let _notifTimers = [];
+function clearNotifTimers() { _notifTimers.forEach(clearTimeout); _notifTimers = []; }
+
+async function scheduleNotifAt(title, body, atMs, id) {
+  const delay = atMs - Date.now();
+  if (delay < 0) return;
+  if (CapLN) {
+    try {
+      await CapLN.schedule({ notifications: [{
+        id: id ?? Math.floor(Math.random()*9000+1000), title, body,
+        schedule: { at: new Date(atMs) }, sound: null,
+        smallIcon: 'ic_stat_icon_config_sample',
+      }]});
+    } catch(e) { console.warn('CapLN error', e); }
+  } else if ('Notification' in window && Notification.permission === 'granted') {
+    _notifTimers.push(setTimeout(() => new Notification(title, { body }), delay));
+  }
+}
+
+async function cancelCapNotifs(...ids) {
+  if (!CapLN) return;
+  try { await CapLN.cancel({ notifications: ids.map(id => ({id})) }); } catch(e) {}
+}
+
+function msUntilTime(hhmm) {
+  const [hh, mm] = hhmm.split(':').map(Number);
+  const t = new Date(); t.setHours(hh, mm, 0, 0);
+  if (t <= new Date()) t.setDate(t.getDate() + 1);
+  return t.getTime();
+}
+function randTimeToday(startH, endH) {
+  const n = new Date();
+  const s = new Date(n.getFullYear(), n.getMonth(), n.getDate(), startH, 0, 0);
+  const e = new Date(n.getFullYear(), n.getMonth(), n.getDate(), endH, 0, 0);
+  return s.getTime() + Math.random() * (e.getTime() - s.getTime());
+}
+
+async function scheduleAllNotifications() {
+  clearNotifTimers();
+  await cancelCapNotifs(1,2,3,4,5);
+
+  const [dailyOn, dailyTime, inactOn, inactDays, checkinOn] = await Promise.all([
+    IDB.getSetting('notifDailyOn'),   IDB.getSetting('notifDailyTime'),
+    IDB.getSetting('notifInactOn'),   IDB.getSetting('notifInactDays'),
+    IDB.getSetting('notifCheckinOn'),
+  ]);
+
+  if (dailyOn) {
+    const m = pick(DAILY_MSGS);
+    await scheduleNotifAt(m.title, m.body, msUntilTime(dailyTime || '21:00'), 1);
+  }
+
+  if (inactOn) {
+    const threshold = parseInt(inactDays || '3', 10);
+    const notes     = await IDB.getAll('notes');
+    const lastDate  = notes.reduce((latest, n) => {
+      const d = new Date(n.updatedAt || n.createdAt);
+      return d > latest ? d : latest;
+    }, new Date(0));
+    if ((Date.now() - lastDate.getTime()) / 86400000 >= threshold) {
+      const m = pick(INACT_MSGS);
+      const tomorrow9 = new Date(); tomorrow9.setDate(tomorrow9.getDate()+1); tomorrow9.setHours(9,0,0,0);
+      await scheduleNotifAt(m.title, m.body, tomorrow9.getTime(), 5);
+    }
+  }
+
+  if (checkinOn) {
+    const slots = [randTimeToday(10,13), randTimeToday(14,17), randTimeToday(18,21)];
+    for (let i = 0; i < slots.length; i++) {
+      const m = pick(CHECKIN_MSGS);
+      await scheduleNotifAt(m.title, m.body, slots[i], 2 + i);
+    }
+  }
+
+  const customs = await IDB.getSetting('customReminders') || [];
+  for (let i = 0; i < customs.length; i++) {
+    const r = customs[i];
+    const atMs = new Date(r.datetime).getTime();
+    if (atMs > Date.now()) await scheduleNotifAt(r.text, '', atMs, 100 + i);
+  }
+}
+
+// ── State ────────────────────────────────────────────────────
+const S = {
+  view:'home', bulk:false, sel:new Set(),
+  editNote:null, editorType:'diary',
+  edLined:true, edLocked:false,
+  edListStyle:'unordered',
+  listItems:[],
+  fabOpen:false, vaultOpen:false,
+  _asTimer:null,
+};
+
+// ── Utils ────────────────────────────────────────────────────
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+       + ' · ' + d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+}
+function preview(n) {
+  if (n.type==='diary'||n.type==='dream') return (n.content||'').replace(/\n/g,' ').trim().slice(0,90)||'Empty entry…';
+  return (n.items||[]).map(i=>i.text).filter(Boolean).join(', ').slice(0,90)||'Empty list…';
+}
+function typeLabel(n) {
+  if (n.type==='diary') return 'Note';
+  if (n.type==='dream') return 'Dream';
+  const tag = n.type==='love' ? 'Things I Love' : 'Things I Hate';
+  return n.subtitle ? `${tag} (${n.subtitle})` : tag;
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Autosave ─────────────────────────────────────────────────
+function showSavedDot() {
+  const d = document.getElementById('ed-saved-dot');
+  d.classList.add('show');
+  setTimeout(() => d.classList.remove('show'), 1800);
+}
+
+function updateCounter() {
+  const footer = document.getElementById('ed-footer');
+  const left   = document.getElementById('ed-counter-left');
+  const right  = document.getElementById('ed-counter-right');
+  if (!footer || !left || !right) return;
+
+  if (S.editorType === 'diary' || S.editorType === 'dream') {
+    const content = document.getElementById('e-content')?.value || '';
+    const title   = document.getElementById('e-title')?.value || '';
+    const fullText = (title + ' ' + content).trim();
+    const words = fullText ? fullText.trim().split(/\s+/).filter(Boolean).length : 0;
+    const chars = content.length; // chars = body only, not title
+    left.textContent  = `${words} word${words !== 1 ? 's' : ''}`;
+    right.textContent = `${chars} char${chars !== 1 ? 's' : ''}`;
+  } else {
+    const texts  = [...document.querySelectorAll('.li-inp')].map(i => i.value);
+    const filled = texts.filter(t => t.trim()).length;
+    const total  = texts.length;
+    const chars  = texts.join('').length;
+    left.textContent  = `${filled} / ${total} item${total !== 1 ? 's' : ''}`;
+    right.textContent = `${chars} char${chars !== 1 ? 's' : ''}`;
+  }
+
+  footer.classList.remove('hidden');
+}
+
+async function autoSaveNote() {
+  if (!document.getElementById('editor').classList.contains('open')) return;
+  const titleEl = document.getElementById('e-title');
+  if (!titleEl) return;
+
+  const type    = S.editorType;
+  const title   = titleEl.value?.trim() || '';
+  const content = document.getElementById('e-content')?.value || '';
+  const subtitle= document.getElementById('e-sub')?.value?.trim() || '';
+  const dreamDate = document.getElementById('e-dream-date')?.value || '';
+  const dreamMood = type==='dream'
+    ? [...document.querySelectorAll('#e-mood-row .dream-tag.sel')].map(b=>b.dataset.mood)
+    : undefined;
+  const now     = new Date().toISOString();
+  const id      = S.editNote?.id || uid();
+
+  // Re-read list items directly from DOM inputs — this is the ground truth.
+  // State (S.listItems) may lag if input events weren't processed yet.
+  if (type !== 'diary') {
+    const domInputs = [...document.querySelectorAll('.li-inp')];
+    if (domInputs.length) {
+      S.listItems = domInputs.map((inp, i) => ({
+        id: S.listItems[i]?.id || uid(),
+        text: inp.value,
+      }));
+    }
+  }
+
+  // Don't save blank new notes
+  const listIsBlank = type !== 'diary' && S.listItems.every(i => !i.text.trim());
+  if (!S.editNote && !title && (type === 'diary' ? !content : listIsBlank)) return;
+
+  const note = {
+    id, type, title, subtitle,
+    content:   (type==='diary'||type==='dream') ? content : '',
+    items:     (type!=='diary'&&type!=='dream') ? S.listItems.filter(i=>i.text.trim()) : [],
+    listStyle: S.edListStyle, lined: S.edLined, locked: S.edLocked,
+    ...(type==='dream' ? {dreamDate, dreamMood} : {}),
+    createdAt: S.editNote?.createdAt || now, updatedAt: now,
+  };
+
+  if (!S.editNote) S.editNote = note; else Object.assign(S.editNote, note);
+
+  if (type === 'hate') {
+    await IDB.put('graveyard', {...note, deletedAt:now});
+    await IDB.del('notes', id).catch(()=>{});
+  } else {
+    await IDB.put('notes', note);
+  }
+  showSavedDot();
+}
+
+function startAutosave() { stopAutosave(); S._asTimer = setInterval(autoSaveNote, 25000); }
+function stopAutosave()  { if (S._asTimer) { clearInterval(S._asTimer); S._asTimer = null; } }
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) autoSaveNote(); });
+window.addEventListener('pagehide', autoSaveNote);
+
+// Browser back button (works in browser, not Capacitor WebView)
+window.addEventListener('popstate', async () => {
+  if (document.getElementById('editor').classList.contains('open')) {
+    await autoSaveNote(); closeEditor(); render();
+  }
+});
+
+// Capacitor Android back button (fires instead of popstate in WebView)
+// Must be registered after DOM ready; safe to do here since script runs at end of body.
+(function bindCapacitorBackButton() {
+  const CapApp = window?.Capacitor?.Plugins?.App ?? null;
+  if (!CapApp) return;
+  CapApp.addListener('backButton', async () => {
+    if (document.getElementById('editor').classList.contains('open')) {
+      await autoSaveNote(); closeEditor(); render();
+    } else if (document.getElementById('settings').classList.contains('open')) {
+      document.getElementById('settings').classList.remove('open');
+    }
+    // If on main screen, let Capacitor default behavior exit the app
+  });
+})();
+
+// ── Render ───────────────────────────────────────────────────
+async function render() {
+  syncNav(); syncBulk();
+  const el = document.getElementById('content');
+  el.classList.toggle('bulk-mode', S.bulk);
+  switch(S.view) {
+    case 'home':      await renderHome(el);      break;
+    case 'dreams':    await renderDreams(el);    break;
+    case 'love':      await renderLove(el);      break;
+    case 'graveyard': await renderGraveyard(el); break;
+    case 'vault':     await renderVault(el);     break;
+  }
+}
+
+function syncNav() {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.view===S.view));
+}
+function syncBulk() {
+  document.getElementById('bulk-bar').classList.toggle('on', S.bulk);
+  document.getElementById('bulk-count').textContent = `${S.sel.size} selected`;
+}
+
+function noteHTML(n, grave=false) {
+  const checked = S.sel.has(n.id);
+  let actions = '';
+  if (grave) {
+    actions = `
+      <div class="grave-acts">
+        <button class="grave-btn" data-action="revive" data-id="${n.id}">Revive</button>
+        <span style="color:var(--t3);font-size:.7rem">·</span>
+        <button class="grave-btn" data-action="forever" data-id="${n.id}">Delete Forever</button>
+      </div>
+      <div class="n-del-date">Deleted ${fmtDate(n.deletedAt)}</div>`;
+  }
+  const moodPills = (n.type==='dream' && n.dreamMood?.length)
+    ? `<div class="dream-moods">${n.dreamMood.map(m=>`<span class="dream-mood-pill">${esc(m)}</span>`).join('')}</div>` : '';
+  const dreamDate = (n.type==='dream' && n.dreamDate)
+    ? `<span style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--t3);margin-right:.5rem">${esc(n.dreamDate)}</span>` : '';
+  return `<div class="note-item" data-id="${n.id}">
+    <div class="n-check${checked?' on':''}" data-id="${n.id}"></div>
+    <div class="n-body">
+      <div class="n-tag">${esc(typeLabel(n))}</div>
+      ${n.title?`<div class="n-title">${esc(n.title)}</div>`:''}
+      <div class="n-preview">${esc(preview(n))}</div>
+      ${moodPills}
+      ${actions}
+      <div class="n-date">${dreamDate}${fmtDate(n.createdAt)}</div>
+    </div>
+    ${(n.locked&&!grave)?'<div class="n-lock">🔒</div>':''}
+  </div>`;
+}
+
+async function renderDreams(el) {
+  const all = await IDB.getAll('notes');
+  const notes = all.filter(n=>n.type==='dream'&&!n.locked)
+    .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
+  el.innerHTML = notes.length ? notes.map(n=>noteHTML(n)).join('') : empty('☽','No dreams recorded yet.<br>What visited you last night?');
+  if (notes.length) bindItems(el);
+}
+
+function empty(icon, msg) {
+  return `<div class="empty"><div class="empty-glyph">${icon}</div><div class="empty-msg">${msg}</div></div>`;
+}
+
+async function renderHome(el) {
+  const all = await IDB.getAll('notes');
+  const notes = all.filter(n=>!n.locked&&n.type!=='love'&&n.type!=='dream')
+    .sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
+  el.innerHTML = notes.length ? notes.map(n=>noteHTML(n)).join('') : empty('✎','Your pages are empty.<br>What are you carrying today?');
+  if (notes.length) bindItems(el);
+}
+async function renderLove(el) {
+  const all = await IDB.getAll('notes');
+  const notes = all.filter(n=>n.type==='love').sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  el.innerHTML = notes.length ? notes.map(n=>noteHTML(n)).join('') : empty('♡','What do you love?<br>Nothing is too small.');
+  if (notes.length) bindItems(el);
+}
+async function renderGraveyard(el) {
+  const notes = (await IDB.getAll('graveyard')).sort((a,b)=>new Date(b.deletedAt)-new Date(a.deletedAt));
+  el.innerHTML = notes.length ? notes.map(n=>noteHTML(n,true)).join('') : empty('☽','The graveyard is quiet.');
+  el.querySelectorAll('.grave-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (btn.dataset.action==='revive') { await revive(btn.dataset.id); return; }
+      showModal({
+        title:'Delete Forever', msg:'This is permanent. Gone means gone.',
+        actions:[{lbl:'Cancel',cls:'sec',fn:closeModal},
+          {lbl:'Delete',cls:'pri',fn:async()=>{await IDB.del('graveyard',btn.dataset.id);closeModal();render();}}]
+      });
+    });
+  });
+  el.querySelectorAll('.note-item').forEach(item => {
+    item.addEventListener('click', async e => {
+      if (e.target.closest('.grave-btn')) return;
+      const n = await IDB.get('graveyard', item.dataset.id);
+      if (n) openEditor(n, true);
+    });
+  });
+}
+async function renderVault(el) {
+  if (!S.vaultOpen) {
+    const vPwd = await IDB.getSetting('vaultPassword');
+    if (!vPwd) {
+      el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:55vh;gap:1rem;padding:2rem;text-align:center">
+        <div style="font-family:'Playfair Display',serif;font-size:1.2rem;font-style:italic">Vault is locked</div>
+        <div style="color:var(--t2);font-size:.9rem;font-style:italic;line-height:1.7">Set a vault password in Settings first.</div></div>`;
+      return;
+    }
+    el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:55vh;gap:1.25rem;padding:2rem">
+      <div style="font-family:'Playfair Display',serif;font-size:1.5rem;font-style:italic">Vault</div>
+      <input type="password" id="v-inp" class="pin-input" placeholder="vault password" style="max-width:280px" autocomplete="off">
+      <button class="lock-submit" id="v-sub" style="max-width:280px">Unlock</button>
+      <div class="lock-err" id="v-err"></div></div>`;
+    document.getElementById('v-sub').addEventListener('click', async () => {
+      const h = await hashPwd(document.getElementById('v-inp').value);
+      if (h === vPwd) { S.vaultOpen=true; render(); }
+      else document.getElementById('v-err').textContent = 'Wrong password.';
+    });
+    document.getElementById('v-inp').addEventListener('keydown', e => {
+      if (e.key==='Enter') document.getElementById('v-sub').click();
+    });
+    return;
+  }
+  const notes = (await IDB.getAll('notes')).filter(n=>n.locked).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  el.innerHTML = notes.length ? notes.map(n=>noteHTML(n)).join('') : empty('🔒','Your vault is empty.<br>Lock notes to keep them here.');
+  if (notes.length) bindItems(el);
+}
+
+function bindItems(container) {
+  container.querySelectorAll('.note-item').forEach(item => {
+    let timer;
+    const startLong = () => { timer = setTimeout(() => { if (!S.bulk) { S.bulk=true; S.sel.add(item.dataset.id); render(); } }, 480); };
+    item.addEventListener('mousedown', startLong);
+    item.addEventListener('touchstart', startLong, {passive:true});
+    ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev => item.addEventListener(ev, ()=>clearTimeout(timer)));
+    item.addEventListener('click', async e => {
+      const id = item.dataset.id;
+      if (e.target.closest('.n-check') || S.bulk) {
+        if (S.sel.has(id)) S.sel.delete(id); else S.sel.add(id);
+        if (!S.sel.size) S.bulk = false;
+        syncBulk();
+        item.querySelector('.n-check').classList.toggle('on', S.sel.has(id));
+        return;
+      }
+      const n = await IDB.get('notes', id);
+      if (n) openEditor(n, false);
+    });
+  });
+}
+
+async function revive(id) {
+  const n = await IDB.get('graveyard', id);
+  if (!n) return;
+  const {deletedAt, ...back} = n;
+  back.updatedAt = new Date().toISOString();
+  await IDB.put('notes', back);
+  await IDB.del('graveyard', id);
+  S.view = back.type==='love' ? 'love' : back.type==='dream' ? 'dreams' : 'home';
+  render();
+}
+
+// ── Editor ───────────────────────────────────────────────────
+function openEditor(note, readOnly) {
+  S.editNote    = note;
+  S.editorType  = note ? note.type : S.editorType;
+  S.edLined     = note ? note.lined!==false : true;
+  S.edLocked    = note ? !!note.locked : false;
+  S.edListStyle = note?.listStyle || 'unordered';
+  S.listItems   = note?.items ? note.items.map(i=>({...i})) : [{id:uid(),text:''}];
+
+  const labels = {diary:'Note',love:'Things I Love',hate:'Things I Hate',dream:'Dream'};
+  document.getElementById('ed-type-lbl').textContent = labels[S.editorType]||'Note';
+
+  const isDiary = S.editorType==='diary' || S.editorType==='dream';
+  document.getElementById('ed-lined').style.display   = isDiary ? '' : 'none';
+  document.getElementById('ed-list-ul').style.display = isDiary ? 'none' : '';
+  document.getElementById('ed-list-ol').style.display = isDiary ? 'none' : '';
+  document.getElementById('ed-lined').classList.toggle('active', S.edLined);
+  syncListBtns();
+
+  document.getElementById('ed-lock').style.opacity = S.edLocked ? '1' : '.45';
+  document.getElementById('ed-save').style.display = readOnly ? 'none' : '';
+
+  buildEditorBody(readOnly);
+  if (!readOnly) { window.history.pushState({vessel:'editor'},''); startAutosave(); }
+  document.getElementById('editor').classList.add('open');
+  setTimeout(() => { if (!readOnly) document.querySelector('#ed-body textarea,#ed-body input[type=text]')?.focus(); }, 320);
+}
+
+function syncListBtns() {
+  document.getElementById('ed-list-ul').classList.toggle('active', S.edListStyle==='unordered');
+  document.getElementById('ed-list-ol').classList.toggle('active', S.edListStyle==='ordered');
+}
+
+function buildEditorBody(readOnly) {
+  const body = document.getElementById('ed-body'), n = S.editNote, ro = readOnly?'readonly':'';
+  if (S.editorType==='diary') {
+    body.innerHTML = `
+      <textarea class="ed-title" id="e-title" placeholder="Title (optional)" rows="1" ${ro}>${esc(n?.title||'')}</textarea>
+      <div class="ed-content${S.edLined?' lined':''}" id="e-content-wrap">
+        <textarea class="ed-textarea" id="e-content" placeholder="Write anything. No limits." ${ro}>${esc(n?.content||'')}</textarea>
+      </div>`;
+  } else if (S.editorType==='dream') {
+    const today = new Date().toISOString().slice(0,10);
+    const dreamDate = n?.dreamDate || today;
+    const dreamMood = n?.dreamMood || [];
+    const MOODS = ['Lucid','Vivid','Recurring','Nightmare','Peaceful','Strange'];
+    body.innerHTML = `
+      <textarea class="ed-title" id="e-title" placeholder="Give this dream a name…" rows="1" ${ro}>${esc(n?.title||'')}</textarea>
+      <div class="dream-meta">
+        <div class="dream-date-row">
+          <span class="dream-date-lbl">Dream date</span>
+          <input type="date" class="dream-date-inp" id="e-dream-date" value="${esc(dreamDate)}" ${ro?'readonly':''}>
+        </div>
+        <div class="dream-tags-row" id="e-mood-row">
+          ${MOODS.map(m=>`<button class="dream-tag${dreamMood.includes(m)?' sel':''}" data-mood="${esc(m)}" ${ro?'readonly tabindex="-1"':''}>${esc(m)}</button>`).join('')}
+        </div>
+        <div class="dream-divider"></div>
+      </div>
+      <div class="ed-content${S.edLined?' lined':''}" id="e-content-wrap">
+        <textarea class="ed-textarea" id="e-content" placeholder="Describe what you remember… images, feelings, fragments." ${ro}>${esc(n?.content||'')}</textarea>
+      </div>`;
+    if (!readOnly) {
+      document.querySelectorAll('#e-mood-row .dream-tag').forEach(btn => {
+        btn.addEventListener('click', () => btn.classList.toggle('sel'));
+      });
+    }
+  } else {
+    const dft = S.editorType==='love' ? 'Things I Love' : 'Things I Hate';
+    body.innerHTML = `
+      <textarea class="ed-title" id="e-title" placeholder="${dft}" rows="1" ${ro}>${esc(n?.title||dft)}</textarea>
+      <input class="ed-sub" id="e-sub" type="text" placeholder="(About Life, About You, …)" value="${esc(n?.subtitle||'')}" ${ro}>
+      <div class="list-ed" id="e-list"></div>`;
+    buildList(readOnly);
+  }
+  const titleEl = document.getElementById('e-title');
+  autoHeight(titleEl);
+  titleEl.addEventListener('input', () => autoHeight(titleEl));
+
+  // Wire up counter for diary notes
+  if ((S.editorType === 'diary' || S.editorType === 'dream') && !readOnly) {
+    document.getElementById('e-content')?.addEventListener('input', updateCounter);
+    titleEl.addEventListener('input', updateCounter);
+  }
+  // Initial counter render (works for both read-only and editable)
+  if (!readOnly) updateCounter();
+  else document.getElementById('ed-footer')?.classList.add('hidden');
+}
+
+function autoHeight(el) { el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
+
+function buildList(readOnly) {
+  const wrap = document.getElementById('e-list');
+  if (!wrap) return;
+  wrap.innerHTML = S.listItems.map((item,i) => {
+    const marker = S.edListStyle==='ordered' ? `${i+1}.` : '•';
+    return `<div class="li-row" data-i="${i}">
+      <div class="li-marker">${marker}</div>
+      <input type="text" class="li-inp" data-i="${i}" value="${esc(item.text)}" placeholder="Add something…" ${readOnly?'readonly':''}>
+      ${!readOnly?`<button class="li-rm" data-i="${i}">×</button>`:''}
+    </div>`;
+  }).join('') + (!readOnly ? `<button class="li-add" id="li-add-btn">+ add another</button>` : '');
+
+  if (readOnly) return;
+  wrap.querySelectorAll('.li-inp').forEach(inp => {
+    inp.addEventListener('input', () => { S.listItems[+inp.dataset.i].text = inp.value; updateCounter(); });
+    inp.addEventListener('keydown', e => {
+      if (e.key!=='Enter') return;
+      e.preventDefault();
+      S.listItems.push({id:uid(),text:''});
+      buildList(false);
+      setTimeout(() => { const all=document.querySelectorAll('.li-inp'); all[all.length-1]?.focus(); }, 40);
+    });
+  });
+  wrap.querySelectorAll('.li-rm').forEach(btn => {
+    btn.addEventListener('click', () => { if (S.listItems.length>1) { S.listItems.splice(+btn.dataset.i,1); buildList(false); } });
+  });
+  document.getElementById('li-add-btn')?.addEventListener('click', () => {
+    S.listItems.push({id:uid(),text:''});
+    buildList(false);
+    setTimeout(() => { const all=document.querySelectorAll('.li-inp'); all[all.length-1]?.focus(); }, 40);
+  });
+  // Update counter after list is (re)built
+  updateCounter();
+}
+
+async function saveNote() {
+  const title   = document.getElementById('e-title')?.value?.trim()||'';
+  const content = document.getElementById('e-content')?.value||'';
+  const subtitle= document.getElementById('e-sub')?.value?.trim()||'';
+  const dreamDate = document.getElementById('e-dream-date')?.value || '';
+  const dreamMood = S.editorType==='dream'
+    ? [...document.querySelectorAll('#e-mood-row .dream-tag.sel')].map(b=>b.dataset.mood)
+    : undefined;
+  const now = new Date().toISOString(), id = S.editNote?.id||uid(), type = S.editorType;
+  // Re-read list from DOM as ground truth
+  if (type !== 'diary' && type !== 'dream') {
+    const domInputs = [...document.querySelectorAll('.li-inp')];
+    if (domInputs.length) {
+      S.listItems = domInputs.map((inp, i) => ({ id: S.listItems[i]?.id || uid(), text: inp.value }));
+    }
+  }
+  const note = {
+    id, type, title, subtitle,
+    content:   (type==='diary'||type==='dream') ? content : '',
+    items:     (type!=='diary'&&type!=='dream') ? S.listItems.filter(i=>i.text.trim()) : [],
+    listStyle: S.edListStyle, lined: S.edLined, locked: S.edLocked,
+    ...(type==='dream' ? {dreamDate, dreamMood} : {}),
+    createdAt: S.editNote?.createdAt||now, updatedAt: now,
+  };
+  if (type==='hate') { await IDB.put('graveyard',{...note,deletedAt:now}); await IDB.del('notes',id).catch(()=>{}); }
+  else               { await IDB.put('notes', note); }
+  stopAutosave(); closeEditor();
+  S.view = type==='hate' ? 'graveyard' : type==='love' ? 'love' : type==='dream' ? 'dreams' : 'home';
+  render(); scheduleAllNotifications();
+}
+
+function closeEditor() {
+  document.getElementById('editor').classList.remove('open');
+  document.getElementById('ed-footer')?.classList.add('hidden');
+  stopAutosave(); S.editNote = null;
+}
+
+// ── Editor controls ──────────────────────────────────────────
+document.getElementById('ed-close').addEventListener('click', async () => { await autoSaveNote(); closeEditor(); render(); });
+document.getElementById('ed-save').addEventListener('click', saveNote);
+document.getElementById('ed-lined').addEventListener('click', () => {
+  S.edLined = !S.edLined;
+  document.getElementById('ed-lined').classList.toggle('active', S.edLined);
+  document.getElementById('e-content-wrap')?.classList.toggle('lined', S.edLined);
+});
+document.getElementById('ed-list-ul').addEventListener('click', () => { S.edListStyle='unordered'; syncListBtns(); buildList(false); });
+document.getElementById('ed-list-ol').addEventListener('click', () => { S.edListStyle='ordered'; syncListBtns(); buildList(false); });
+document.getElementById('ed-lock').addEventListener('click', () => {
+  S.edLocked = !S.edLocked;
+  document.getElementById('ed-lock').style.opacity = S.edLocked ? '1' : '.45';
+});
+
+// ── FAB ──────────────────────────────────────────────────────
+document.getElementById('fab').addEventListener('click', () => {
+  S.fabOpen = !S.fabOpen;
+  document.getElementById('fab').classList.toggle('open', S.fabOpen);
+  document.getElementById('fab-menu').classList.toggle('open', S.fabOpen);
+  document.getElementById('backdrop').classList.toggle('on', S.fabOpen);
+});
+document.getElementById('backdrop').addEventListener('click', () => {
+  S.fabOpen = false;
+  ['fab','fab-menu','backdrop'].forEach(id => document.getElementById(id).classList.remove('open','on'));
+  document.getElementById('fab').classList.remove('open');
+  document.getElementById('fab-menu').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('on');
+});
+document.querySelectorAll('.fab-opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    S.fabOpen=false; S.editorType=opt.dataset.type;
+    S.editNote=null; S.edLined=true; S.edLocked=false;
+    S.edListStyle='unordered'; S.listItems=[{id:uid(),text:''}];
+    document.getElementById('fab').classList.remove('open');
+    document.getElementById('fab-menu').classList.remove('open');
+    document.getElementById('backdrop').classList.remove('on');
+    openEditor(null, false);
+  });
+});
+
+// ── Nav tabs ─────────────────────────────────────────────────
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    S.view=tab.dataset.view; S.bulk=false; S.sel.clear();
+    if (tab.dataset.view!=='vault') S.vaultOpen=false;
+    render();
+  });
+});
+
+// ── Theme ─────────────────────────────────────────────────────
+async function applyTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+  await IDB.setSetting('theme', dark?'dark':'light');
+  document.getElementById('s-theme').classList.toggle('on', dark);
+}
+document.getElementById('theme-btn').addEventListener('click', () => {
+  applyTheme(document.documentElement.getAttribute('data-theme')!=='dark');
+});
+
+// ── Bulk ─────────────────────────────────────────────────────
+document.getElementById('b-cancel').addEventListener('click', ()=>{ S.bulk=false; S.sel.clear(); render(); });
+document.getElementById('b-all').addEventListener('click', async () => {
+  (await IDB.getAll('notes')).filter(n => {
+    if (S.view==='home')   return !n.locked && n.type!=='love' && n.type!=='dream';
+    if (S.view==='dreams') return n.type==='dream' && !n.locked;
+    if (S.view==='love')   return n.type==='love';
+    if (S.view==='vault')  return n.locked;
+    return false;
+  }).forEach(n => S.sel.add(n.id));
+  syncBulk(); render();
+});
+document.getElementById('b-dup').addEventListener('click', async () => {
+  for (const id of [...S.sel]) {
+    const n = await IDB.get('notes', id);
+    if (n) { const now=new Date().toISOString(); await IDB.put('notes',{...n,id:uid(),title:(n.title?n.title+' (copy)':''),createdAt:now,updatedAt:now}); }
+  }
+  S.bulk=false; S.sel.clear(); render();
+});
+document.getElementById('b-del').addEventListener('click', () => {
+  const count = S.sel.size;
+  showModal({ title:'Move to Graveyard', msg:`Send ${count} note${count!==1?'s':''} to the graveyard?`,
+    actions:[{lbl:'Cancel',cls:'sec',fn:closeModal},
+      {lbl:'Send',cls:'pri',fn:async()=>{
+        for (const id of [...S.sel]) {
+          const n = await IDB.get('notes',id);
+          if (n) { await IDB.put('graveyard',{...n,deletedAt:new Date().toISOString()}); await IDB.del('notes',id); }
+        }
+        S.bulk=false; S.sel.clear(); closeModal(); render();
+      }}]
+  });
+});
+
+// ── Settings ─────────────────────────────────────────────────
+document.getElementById('settings-btn').addEventListener('click', async () => {
+  document.getElementById('settings').classList.add('open');
+  await refreshSettings();
+});
+document.getElementById('settings-close').addEventListener('click', () => {
+  document.getElementById('settings').classList.remove('open');
+});
+
+async function refreshSettings() {
+  document.getElementById('s-theme').classList.toggle('on', document.documentElement.getAttribute('data-theme')==='dark');
+  document.getElementById('s-lock-toggle').classList.toggle('on', !!(await IDB.getSetting('appLockEnabled')));
+  document.getElementById('s-app-status').textContent   = (await IDB.getSetting('appPassword'))   ? 'Set ✓' : 'Not set';
+  document.getElementById('s-vault-status').textContent = (await IDB.getSetting('vaultPassword'))  ? 'Set ✓' : 'Not set';
+  document.getElementById('s-notif-perm').textContent   = notifPermStatus();
+
+  const dailyOn   = await IDB.getSetting('notifDailyOn');
+  const dailyTime = await IDB.getSetting('notifDailyTime') || '21:00';
+  document.getElementById('s-daily-toggle').classList.toggle('on', !!dailyOn);
+  document.getElementById('s-daily-time-row').style.display = dailyOn ? '' : 'none';
+  document.getElementById('s-daily-time').value = dailyTime;
+
+  const inactOn   = await IDB.getSetting('notifInactOn');
+  const inactDays = await IDB.getSetting('notifInactDays') || '3';
+  document.getElementById('s-inact-toggle').classList.toggle('on', !!inactOn);
+  document.getElementById('s-inact-days-row').style.display = inactOn ? '' : 'none';
+  document.getElementById('s-inact-days').value = inactDays;
+  document.getElementById('s-inact-sub').textContent = `After ${inactDays} days without writing`;
+
+  document.getElementById('s-checkin-toggle').classList.toggle('on', !!(await IDB.getSetting('notifCheckinOn')));
+  await refreshReminderList();
+}
+
+document.getElementById('s-notif-req').addEventListener('click', async () => {
+  const ok = await requestNotifPermission();
+  document.getElementById('s-notif-perm').textContent = ok ? 'Granted ✓' : 'Denied — enable in system settings';
+  if (ok) scheduleAllNotifications();
+});
+document.getElementById('s-theme').addEventListener('click', () => {
+  applyTheme(document.documentElement.getAttribute('data-theme')!=='dark');
+});
+document.getElementById('s-lock-toggle').addEventListener('click', async () => {
+  const cur = await IDB.getSetting('appLockEnabled');
+  if (!cur && !(await IDB.getSetting('appPassword'))) {
+    showModal({title:'No Password',msg:'Set an app password first.',actions:[{lbl:'OK',cls:'pri',fn:closeModal}]});
+    return;
+  }
+  await IDB.setSetting('appLockEnabled', !cur);
+  document.getElementById('s-lock-toggle').classList.toggle('on', !cur);
+});
+document.getElementById('s-app-pwd').addEventListener('click',   () => showPwdModal('App Password',   'appPassword',   refreshSettings));
+document.getElementById('s-vault-pwd').addEventListener('click', () => showPwdModal('Vault Password', 'vaultPassword', ()=>{ S.vaultOpen=false; refreshSettings(); }));
+
+document.getElementById('s-daily-toggle').addEventListener('click', async () => {
+  const cur = await IDB.getSetting('notifDailyOn');
+  await IDB.setSetting('notifDailyOn', !cur);
+  document.getElementById('s-daily-toggle').classList.toggle('on', !cur);
+  document.getElementById('s-daily-time-row').style.display = !cur ? '' : 'none';
+  scheduleAllNotifications();
+});
+document.getElementById('s-daily-time').addEventListener('change', async e => {
+  await IDB.setSetting('notifDailyTime', e.target.value); scheduleAllNotifications();
+});
+document.getElementById('s-inact-toggle').addEventListener('click', async () => {
+  const cur = await IDB.getSetting('notifInactOn');
+  await IDB.setSetting('notifInactOn', !cur);
+  document.getElementById('s-inact-toggle').classList.toggle('on', !cur);
+  document.getElementById('s-inact-days-row').style.display = !cur ? '' : 'none';
+  scheduleAllNotifications();
+});
+document.getElementById('s-inact-days').addEventListener('change', async e => {
+  await IDB.setSetting('notifInactDays', e.target.value);
+  document.getElementById('s-inact-sub').textContent = `After ${e.target.value} days without writing`;
+  scheduleAllNotifications();
+});
+document.getElementById('s-checkin-toggle').addEventListener('click', async () => {
+  const cur = await IDB.getSetting('notifCheckinOn');
+  await IDB.setSetting('notifCheckinOn', !cur);
+  document.getElementById('s-checkin-toggle').classList.toggle('on', !cur);
+  scheduleAllNotifications();
+});
+
+document.getElementById('s-add-reminder').addEventListener('click', () => {
+  showModal({
+    title:'New Reminder', msg:'Leave yourself a note. It will find you when the time comes.',
+    inputs:[{ph:'Your message…'},{ph:''}],
+    actions:[{lbl:'Cancel',cls:'sec',fn:closeModal},
+      {lbl:'Set',cls:'pri',fn:async()=>{
+        const inps = [...document.querySelectorAll('.modal-inp')];
+        const text=inps[0].value.trim(), dt=inps[1].value;
+        if (!text) { inps[0].classList.add('err'); return; }
+        if (!dt || new Date(dt)<=new Date()) { inps[1].classList.add('err'); return; }
+        const customs = await IDB.getSetting('customReminders') || [];
+        customs.push({id:uid(),text,datetime:dt});
+        await IDB.setSetting('customReminders', customs);
+        closeModal(); await refreshReminderList(); scheduleAllNotifications();
+      }}]
+  });
+  setTimeout(() => { const inps=document.querySelectorAll('.modal-inp'); if(inps[1]) inps[1].type='datetime-local'; }, 30);
+});
+
+async function refreshReminderList() {
+  const wrap    = document.getElementById('reminder-list');
+  const customs = (await IDB.getSetting('customReminders') || []).filter(r => new Date(r.datetime) > new Date());
+  if (!customs.length) { wrap.innerHTML=`<div style="font-size:.85rem;font-style:italic;color:var(--t3);padding:.5rem 0">No reminders set.</div>`; return; }
+  wrap.innerHTML = customs.map(r=>`
+    <div class="reminder-item">
+      <div style="flex:1">
+        <div class="reminder-text">${esc(r.text)}</div>
+        <div class="reminder-when">${new Date(r.datetime).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+      <button class="reminder-del" data-id="${r.id}">×</button>
+    </div>`).join('');
+  wrap.querySelectorAll('.reminder-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      let c = await IDB.getSetting('customReminders') || [];
+      c = c.filter(r => r.id !== btn.dataset.id);
+      await IDB.setSetting('customReminders', c);
+      await refreshReminderList(); scheduleAllNotifications();
+    });
+  });
+}
+
+function showPwdModal(label, key, onDone) {
+  const statusEl = key==='appPassword' ? document.getElementById('s-app-status') : document.getElementById('s-vault-status');
+  const isChange = statusEl.textContent.includes('✓');
+  const inputDefs = isChange ? [{ph:'Current password'},{ph:'New password'},{ph:'Confirm new password'}] : [{ph:'New password'},{ph:'Confirm password'}];
+  showModal({
+    title: isChange ? `Change ${label}` : `Set ${label}`, msg:'', inputs:inputDefs,
+    actions:[{lbl:'Cancel',cls:'sec',fn:closeModal},
+      {lbl:'Save',cls:'pri',fn:async()=>{
+        const inps=[...document.querySelectorAll('.modal-inp')]; inps.forEach(i=>i.classList.remove('err'));
+        if (isChange) {
+          const [c,n,co]=inps, stored=await IDB.getSetting(key), ch=await hashPwd(c.value);
+          if (ch!==stored) { c.classList.add('err'); c.value=''; c.placeholder='Wrong password'; return; }
+          if (!n.value||n.value!==co.value) { co.classList.add('err'); return; }
+          await IDB.setSetting(key, await hashPwd(n.value));
+        } else {
+          const [n,co]=inps;
+          if (!n.value||n.value!==co.value) { co.classList.add('err'); return; }
+          await IDB.setSetting(key, await hashPwd(n.value));
+        }
+        closeModal(); onDone?.();
+      }}]
+  });
+  setTimeout(() => document.querySelectorAll('.modal-inp').forEach(i=>{ i.type='password'; }), 30);
+}
+
+// ── Modal ─────────────────────────────────────────────────────
+function showModal({title='',msg='',inputs=[],actions=[]}) {
+  document.getElementById('modal-ttl').textContent = title;
+  document.getElementById('modal-msg').textContent = msg;
+  document.getElementById('modal-inps').innerHTML  = inputs.map((inp,i)=>`<input class="modal-inp" id="m-inp-${i}" type="text" placeholder="${esc(inp.ph||'')}" autocomplete="off">`).join('');
+  const actEl = document.getElementById('modal-acts'); actEl.innerHTML = '';
+  actions.forEach(a => { const btn=document.createElement('button'); btn.textContent=a.lbl; btn.className=`m-btn ${a.cls}`; btn.addEventListener('click',a.fn); actEl.appendChild(btn); });
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target===document.getElementById('modal')) closeModal(); });
+
+// ── Lock screen ───────────────────────────────────────────────
+document.getElementById('lock-sub').addEventListener('click', async () => {
+  const hash=await hashPwd(document.getElementById('lock-inp').value), stored=await IDB.getSetting('appPassword');
+  if (hash===stored) { document.getElementById('lock-screen').classList.add('hidden'); document.getElementById('lock-inp').value=''; }
+  else { const err=document.getElementById('lock-err'); err.textContent='Incorrect password.'; setTimeout(()=>err.textContent='',2200); }
+});
+document.getElementById('lock-inp').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('lock-sub').click(); });
+
+// ── Boot ─────────────────────────────────────────────────────
+(async () => {
+  await openDB();
+  const theme = await IDB.getSetting('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('s-theme').classList.toggle('on', theme==='dark');
+  if (await IDB.getSetting('appLockEnabled') && await IDB.getSetting('appPassword')) {
+    document.getElementById('lock-screen').classList.remove('hidden');
+  }
+  await scheduleAllNotifications();
+  render();
+})();
+</script>
+</body>
+</html>
