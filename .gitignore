@@ -146,4 +146,17 @@ Thumbs.db
 *.bak
 *.old
 *.orig
- 
+
+# Node dependencies
+node_modules/
+
+# Android-specific ignores
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/local.properties
+
+# Capacitor-specific
+capacitor.config.json.bak
